@@ -88,8 +88,7 @@ Mac get_mac_adress(pcap_t* handle, Mac eth_dmac, Mac eth_smac, uint16_t arp_op, 
 	struct pcap_pkthdr *header;
 	const u_char *packet;
 
-	while (true)
-	{
+	while (true) {
 		int res = pcap_next_ex(handle, &header, &packet);
 		if (res == 0) continue;
 		if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
@@ -107,4 +106,38 @@ Mac get_mac_adress(pcap_t* handle, Mac eth_dmac, Mac eth_smac, uint16_t arp_op, 
 
 		return mac_addr;
 	}
+}
+
+int relay_packet(pcap_t* handle, Mac src_mac, Mac sender_mac, Mac target_mac)
+{
+	struct pcap_pkthdr *header;
+	const u_char *packet;
+
+	int res = pcap_next_ex(handle, &header, &packet);
+	if (res == 0) return 1;
+	if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
+		printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
+		return 1;
+	}
+
+	EthArpPacket* relay_packet = (EthArpPacket *)(packet);
+	if (relay_packet->eth_.smac_ == sender_mac && relay_packet->eth_.dmac_ == src_mac) {
+		relay_packet->eth_.smac_ = src_mac;
+		relay_packet->eth_.dmac_ = target_mac;
+	} else if (relay_packet->eth_.smac_ == target_mac && relay_packet->eth_.dmac_ == src_mac) {
+		relay_packet->eth_.smac_ = src_mac;
+		relay_packet->eth_.dmac_ = sender_mac;
+	} else if (relay_packet->eth_.type() == EthHdr::Arp &&
+					relay_packet->arp_.op() == ArpHdr::Request &&
+					relay_packet->eth_.dmac_ == Mac("ff:ff:ff:ff:ff:ff")) {
+		return -1;
+	}
+
+	res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(relay_packet), sizeof(EthArpPacket));
+	if (res != 0) {
+		fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+		return 1;
+	}
+
+	return 1;
 }

